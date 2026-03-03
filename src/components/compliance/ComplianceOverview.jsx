@@ -1,9 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MOCK_DATA } from '../../data/mockData'
-import { Chart, registerables } from 'chart.js'
-
-Chart.register(...registerables)
+import * as echarts from 'echarts'
 
 export default function ComplianceOverview() {
     const navigate = useNavigate()
@@ -14,28 +12,42 @@ export default function ComplianceOverview() {
 
     useEffect(() => {
         if (chartRef.current) {
-            if (chartInstance.current) chartInstance.current.destroy()
-            chartInstance.current = new Chart(chartRef.current, {
-                type: 'line',
-                data: {
-                    labels: ['Q1', 'Q2', 'Q3', 'Q4'],
-                    datasets: [
-                        { label: 'Events', data: [6234, 7891, 9234, 12847], borderColor: '#2196F3', backgroundColor: 'rgba(33,150,243,0.05)', tension: 0.4, fill: true, pointRadius: 2 },
-                    ],
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { display: true, ticks: { font: { size: 9 } }, grid: { display: false } },
-                        x: { display: true, ticks: { font: { size: 9 } }, grid: { display: false } },
+            if (chartInstance.current) chartInstance.current.dispose()
+            chartInstance.current = echarts.init(chartRef.current)
+
+            const option = {
+                grid: { left: 50, right: 20, top: 40, bottom: 40 },
+                tooltip: { trigger: 'axis', axisPointer: { type: 'line' } },
+                legend: { top: 0, textStyle: { fontSize: 10 }, icon: 'circle' },
+                xAxis: { type: 'category', data: ['Q1', 'Q2', 'Q3', 'Q4'], splitLine: { show: false }, axisLabel: { fontSize: 9 } },
+                yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed', opacity: 0.3 } }, axisLabel: { fontSize: 9 } },
+                series: [{
+                    name: 'Audit Events',
+                    type: 'line',
+                    smooth: true,
+                    data: [6234, 7891, 9234, 12847],
+                    itemStyle: { color: '#5470C6' },
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(84, 112, 198, 0.3)' },
+                            { offset: 1, color: 'rgba(84, 112, 198, 0.05)' }
+                        ])
                     },
-                },
-            })
+                    symbol: 'circle',
+                    symbolSize: 6
+                }]
+            }
+
+            chartInstance.current.setOption(option)
         }
-        return () => { if (chartInstance.current) chartInstance.current.destroy() }
-    }, [])
+
+        const handleResize = () => chartInstance.current?.resize()
+        window.addEventListener('resize', handleResize)
+        return () => {
+            window.removeEventListener('resize', handleResize)
+            chartInstance.current?.dispose()
+        }
+    }, [overview])
 
     return (
         <div>
@@ -124,9 +136,7 @@ export default function ComplianceOverview() {
                                 <i className="fas fa-chart-line text-primary-blue text-[10px]"></i> Volume Trend
                             </h2>
                         </div>
-                        <div className="p-4 h-[200px]">
-                            <canvas ref={chartRef}></canvas>
-                        </div>
+                        <div className="p-4 h-[200px]" ref={chartRef}></div>
                     </div>
                 </div>
 

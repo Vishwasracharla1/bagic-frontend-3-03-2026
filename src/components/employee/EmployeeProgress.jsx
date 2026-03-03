@@ -1,8 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { MOCK_DATA } from '../../data/mockData'
-import { Chart, registerables } from 'chart.js'
-
-Chart.register(...registerables)
+import * as echarts from 'echarts'
 
 export default function EmployeeProgress() {
     const employee = MOCK_DATA.employee
@@ -11,34 +9,37 @@ export default function EmployeeProgress() {
 
     useEffect(() => {
         if (chartRef.current) {
-            if (chartInstance.current) chartInstance.current.destroy()
-            chartInstance.current = new Chart(chartRef.current, {
-                type: 'line',
-                data: {
-                    labels: ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8'],
-                    datasets: employee.goals.slice(0, 3).map((goal, index) => ({
-                        label: goal.title,
-                        data: Array.from({ length: 8 }, (_, i) => Math.min(goal.progress, Math.round((goal.progress / 8) * (i + 1) + (Math.random() * 10 - 5)))),
-                        borderColor: ['#2196F3', '#4CAF50', '#FF9800', '#9C27B0'][index % 4],
-                        borderWidth: 2,
-                        tension: 0.4,
-                        pointRadius: 2,
-                        fill: false,
-                    })),
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
-                    scales: {
-                        y: { beginAtZero: true, max: 100, ticks: { font: { size: 10 } } },
-                        x: { ticks: { font: { size: 10 } } }
-                    },
-                },
-            })
+            if (chartInstance.current) chartInstance.current.dispose()
+            chartInstance.current = echarts.init(chartRef.current)
+
+            const option = {
+                grid: { left: 40, right: 30, top: 40, bottom: 40 },
+                tooltip: { trigger: 'axis', axisPointer: { type: 'line' } },
+                legend: { top: 0, textStyle: { fontSize: 10 }, type: 'scroll' },
+                xAxis: { type: 'category', data: ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8'], boundaryGap: false, axisLabel: { fontSize: 9 } },
+                yAxis: { type: 'value', max: 100, axisLabel: { fontSize: 9, formatter: '{value}%' } },
+                series: employee.goals.slice(0, 3).map((goal, index) => ({
+                    name: goal.title,
+                    type: 'line',
+                    smooth: true,
+                    data: Array.from({ length: 8 }, (_, i) => Math.min(goal.progress, Math.round((goal.progress / 8) * (i + 1) + (Math.random() * 10 - 5)))),
+                    itemStyle: { color: ['#5470C6', '#91CC75', '#EE6666', '#FAC858'][index % 4] },
+                    lineStyle: { width: 2.5 },
+                    symbol: 'circle',
+                    symbolSize: 4
+                }))
+            }
+
+            chartInstance.current.setOption(option)
         }
-        return () => { if (chartInstance.current) chartInstance.current.destroy() }
-    }, [])
+
+        const handleResize = () => chartInstance.current?.resize()
+        window.addEventListener('resize', handleResize)
+        return () => {
+            window.removeEventListener('resize', handleResize)
+            chartInstance.current?.dispose()
+        }
+    }, [employee])
 
     return (
         <div>
@@ -59,9 +60,7 @@ export default function EmployeeProgress() {
                                 <i className="fas fa-chart-line text-primary-blue text-[10px]"></i> Progress Over Time
                             </h2>
                         </div>
-                        <div className="p-4 h-[250px]">
-                            <canvas ref={chartRef}></canvas>
-                        </div>
+                        <div className="p-4 h-[250px]" ref={chartRef}></div>
                     </div>
 
                     {/* Goal Details */}

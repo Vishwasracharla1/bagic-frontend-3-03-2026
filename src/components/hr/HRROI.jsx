@@ -1,8 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { MOCK_DATA } from '../../data/mockData'
-import { Chart, registerables } from 'chart.js'
-
-Chart.register(...registerables)
+import * as echarts from 'echarts'
 
 export default function HRROI() {
     const hr = MOCK_DATA.hr
@@ -12,29 +10,36 @@ export default function HRROI() {
 
     useEffect(() => {
         if (chartRef.current) {
-            if (chartInstance.current) chartInstance.current.destroy()
-            chartInstance.current = new Chart(chartRef.current, {
-                type: 'doughnut',
-                data: {
-                    labels: ['External', 'Internal Scale'],
-                    datasets: [{
-                        data: [roi.calculations.externalCoachingAvoided, roi.calculations.internalScaleUpAvoided],
-                        backgroundColor: ['#2196F3', '#4CAF50'],
-                        borderWidth: 0,
-                    }],
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '75%',
-                    plugins: {
-                        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
-                    },
-                },
-            })
+            if (chartInstance.current) chartInstance.current.dispose()
+            chartInstance.current = echarts.init(chartRef.current)
+
+            const option = {
+                tooltip: { trigger: 'item', formatter: '{b}: ${c}M ({d}%)' },
+                legend: { bottom: 0, icon: 'circle', itemWidth: 10, textStyle: { fontSize: 10 } },
+                series: [{
+                    type: 'pie',
+                    radius: ['60%', '85%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
+                    label: { show: false },
+                    emphasis: { label: { show: true, fontSize: 12, fontWeight: 'bold' } },
+                    data: [
+                        { value: (roi.calculations.externalCoachingAvoided / 1000000).toFixed(2), name: 'External', itemStyle: { color: '#5470C6' } },
+                        { value: (roi.calculations.internalScaleUpAvoided / 1000000).toFixed(2), name: 'Internal Scale', itemStyle: { color: '#91CC75' } },
+                    ]
+                }]
+            }
+
+            chartInstance.current.setOption(option)
         }
-        return () => { if (chartInstance.current) chartInstance.current.destroy() }
-    }, [])
+
+        const handleResize = () => chartInstance.current?.resize()
+        window.addEventListener('resize', handleResize)
+        return () => {
+            window.removeEventListener('resize', handleResize)
+            chartInstance.current?.dispose()
+        }
+    }, [roi])
 
     return (
         <div>
@@ -74,9 +79,7 @@ export default function HRROI() {
                             </h2>
                         </div>
                         <div className="p-4">
-                            <div className="h-[200px] mb-4">
-                                <canvas ref={chartRef}></canvas>
-                            </div>
+                            <div className="h-[200px] mb-4" ref={chartRef}></div>
                             <div className="space-y-2">
                                 {[
                                     { label: 'External Avoided', value: `$${(roi.calculations.externalCoachingAvoided / 1000000).toFixed(2)}M` },

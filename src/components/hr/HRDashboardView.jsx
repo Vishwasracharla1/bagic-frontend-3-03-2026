@@ -1,8 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { MOCK_DATA } from '../../data/mockData'
-import { Chart, registerables } from 'chart.js'
-
-Chart.register(...registerables)
+import * as echarts from 'echarts'
 
 export default function HRDashboardView() {
     const hr = MOCK_DATA.hr
@@ -12,29 +10,49 @@ export default function HRDashboardView() {
 
     useEffect(() => {
         if (chartRef.current) {
-            if (chartInstance.current) chartInstance.current.destroy()
-            chartInstance.current = new Chart(chartRef.current, {
-                type: 'bar',
-                data: {
-                    labels: hr.programs.map(p => p.name.split(' ').slice(0, 2).join(' ')),
-                    datasets: [
-                        { label: 'Active', data: hr.programs.map(p => p.active), backgroundColor: 'rgba(33, 150, 243, 0.7)', borderRadius: 4 },
-                        { label: 'Complete', data: hr.programs.map(p => p.completed), backgroundColor: 'rgba(76, 175, 80, 0.7)', borderRadius: 4 },
-                    ],
+            if (chartInstance.current) chartInstance.current.dispose()
+            chartInstance.current = echarts.init(chartRef.current)
+
+            const option = {
+                grid: { left: 40, right: 20, top: 40, bottom: 60 },
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                legend: { top: 0, textStyle: { fontSize: 10 } },
+                xAxis: {
+                    type: 'category',
+                    data: hr.programs.map(p => p.name.split(' ').slice(0, 2).join(' ')),
+                    axisLabel: {
+                        fontSize: 9,
+                        interval: 0,
+                        rotate: 30
+                    }
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
-                    scales: {
-                        y: { beginAtZero: true, ticks: { font: { size: 10 } } },
-                        x: { ticks: { font: { size: 10 } } }
+                yAxis: { type: 'value', axisLabel: { fontSize: 9 } },
+                series: [
+                    {
+                        name: 'Active',
+                        type: 'bar',
+                        data: hr.programs.map(p => p.active),
+                        itemStyle: { color: '#5470C6', borderRadius: [2, 2, 0, 0] }
                     },
-                },
-            })
+                    {
+                        name: 'Complete',
+                        type: 'bar',
+                        data: hr.programs.map(p => p.completed),
+                        itemStyle: { color: '#91CC75', borderRadius: [2, 2, 0, 0] }
+                    },
+                ]
+            }
+
+            chartInstance.current.setOption(option)
         }
-        return () => { if (chartInstance.current) chartInstance.current.destroy() }
-    }, [])
+
+        const handleResize = () => chartInstance.current?.resize()
+        window.addEventListener('resize', handleResize)
+        return () => {
+            window.removeEventListener('resize', handleResize)
+            chartInstance.current?.dispose()
+        }
+    }, [hr])
 
     return (
         <div>
@@ -78,9 +96,7 @@ export default function HRDashboardView() {
                                 <i className="fas fa-chart-bar text-primary-blue text-[10px]"></i> Program Performance
                             </h2>
                         </div>
-                        <div className="p-4 h-[250px]">
-                            <canvas ref={chartRef}></canvas>
-                        </div>
+                        <div className="p-4 h-[250px]" ref={chartRef}></div>
                     </div>
 
                     {/* Impact Metrics */}

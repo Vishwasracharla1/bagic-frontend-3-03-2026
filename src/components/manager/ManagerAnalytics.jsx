@@ -1,101 +1,119 @@
 import { useEffect, useRef } from 'react'
 import { MOCK_DATA } from '../../data/mockData'
-import { Chart, registerables } from 'chart.js'
-
-Chart.register(...registerables)
+import * as echarts from 'echarts'
 
 export default function ManagerAnalytics() {
     const manager = MOCK_DATA.manager
-    const progressChartRef = useRef(null)
-    const riskChartRef = useRef(null)
-    const skillChartRef = useRef(null)
-    const charts = useRef([])
+    const progressRef = useRef(null)
+    const riskRef = useRef(null)
+    const skillRef = useRef(null)
+    const chartInstances = useRef([])
+
+    const palette = [
+        "#5470C6", "#91CC75", "#EE6666", "#73C0DE", "#FAC858", "#3BA272", "#FC8452", "#9A60B4", "#EA7CCC"
+    ]
 
     useEffect(() => {
-        charts.current.forEach(c => c.destroy())
-        charts.current = []
+        // Clear existing instances
+        chartInstances.current.forEach(c => c?.dispose())
+        chartInstances.current = []
 
-        // Team Progress Chart
-        if (progressChartRef.current) {
-            charts.current.push(new Chart(progressChartRef.current, {
+        // 1. Team Progress Chart (Horizontal Bar - Functional Legend)
+        if (progressRef.current) {
+            const chart = echarts.init(progressRef.current)
+            chartInstances.current.push(chart)
+
+            const names = manager.team.map(m => m.name.split(' ')[0])
+            const values = manager.team.map(m => m.progress)
+
+            // One series per person so legend can toggle each bar
+            const series = names.map((name, idx) => ({
+                name,
                 type: 'bar',
-                data: {
-                    labels: manager.team.map(m => m.name.split(' ')[0]),
-                    datasets: [{
-                        label: 'Goal Progress (%)',
-                        data: manager.team.map(m => m.progress),
-                        backgroundColor: manager.team.map(m =>
-                            m.progress >= 70 ? '#4CAF50' : m.progress >= 40 ? '#FFC107' : '#F44336'
-                        ),
-                        borderRadius: 4,
-                    }],
+                data: names.map((_, i) => i === idx ? values[idx] : 0),
+                barWidth: '60%',
+                barGap: '-100%',
+                itemStyle: {
+                    color: values[idx] >= 70 ? '#4CAF50' : values[idx] >= 40 ? '#FFC107' : '#F44336',
+                    borderRadius: [0, 4, 4, 0]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { beginAtZero: true, max: 100, ticks: { font: { size: 10 } } },
-                        x: { ticks: { font: { size: 10 } } }
-                    },
+                label: {
+                    show: true,
+                    position: 'right',
+                    fontSize: 9,
+                    fontWeight: 'bold',
+                    formatter: (p) => p.value ? p.value + '%' : ''
                 },
+                emphasis: { focus: 'series' }
             }))
+
+            chart.setOption({
+                grid: { left: 80, right: 40, top: 40, bottom: 20 },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: (params) => {
+                        const active = params.find(p => p.value !== 0) || params[0];
+                        return `<div style="font-weight:bold">${active.axisValue}</div><div>Progress: ${active.value}%</div>`;
+                    }
+                },
+                legend: { top: 0, type: 'scroll', icon: 'circle', itemWidth: 10, textStyle: { fontSize: 10 } },
+                xAxis: { type: 'value', max: 100, splitLine: { show: false }, axisLabel: { fontSize: 9 } },
+                yAxis: { type: 'category', data: names, axisLabel: { fontSize: 10, fontWeight: 'bold' } },
+                series
+            })
         }
 
-        // Risk Distribution Chart
-        if (riskChartRef.current) {
-            charts.current.push(new Chart(riskChartRef.current, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Low Risk', 'Medium Risk', 'High Risk'],
-                    datasets: [{
-                        data: [
-                            manager.teamAnalytics.riskDistribution.low,
-                            manager.teamAnalytics.riskDistribution.medium,
-                            manager.teamAnalytics.riskDistribution.high,
-                        ],
-                        backgroundColor: ['#4CAF50', '#FFC107', '#F44336'],
-                        borderWidth: 0,
-                    }],
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '70%',
-                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
-                },
-            }))
+        // 2. Risk Distribution Chart (Doughnut)
+        if (riskRef.current) {
+            const chart = echarts.init(riskRef.current)
+            chartInstances.current.push(chart)
+
+            chart.setOption({
+                tooltip: { trigger: 'item' },
+                legend: { bottom: 0, icon: 'circle', itemWidth: 8, textStyle: { fontSize: 10 } },
+                series: [{
+                    type: 'pie',
+                    radius: ['50%', '80%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
+                    label: { show: false },
+                    emphasis: { label: { show: true, fontSize: 12, fontWeight: 'bold' } },
+                    data: [
+                        { value: manager.teamAnalytics.riskDistribution.low, name: 'Low Risk', itemStyle: { color: '#4CAF50' } },
+                        { value: manager.teamAnalytics.riskDistribution.medium, name: 'Medium Risk', itemStyle: { color: '#FFC107' } },
+                        { value: manager.teamAnalytics.riskDistribution.high, name: 'High Risk', itemStyle: { color: '#F44336' } },
+                    ]
+                }]
+            })
         }
 
-        // Skill Improvement Chart
-        if (skillChartRef.current) {
-            charts.current.push(new Chart(skillChartRef.current, {
-                type: 'line',
-                data: {
-                    labels: ['Month 1', 'Month 2', 'Month 3', 'Current'],
-                    datasets: [
-                        { label: 'Feedback', data: [0, 8, 15, manager.teamAnalytics.improvementTrends.feedbackSkill], borderColor: '#2196F3', tension: 0.4, pointRadius: 2 },
-                        { label: 'Delegation', data: [0, 5, 9, manager.teamAnalytics.improvementTrends.delegationSkill], borderColor: '#4CAF50', tension: 0.4, pointRadius: 2 },
-                        { label: 'EQ', data: [0, 6, 11, manager.teamAnalytics.improvementTrends.emotionalIntelligence], borderColor: '#FF9800', tension: 0.4, pointRadius: 2 },
-                    ],
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: { callback: (v) => '+' + v + '%', font: { size: 10 } },
-                        },
-                        x: { ticks: { font: { size: 10 } } }
-                    },
-                },
-            }))
+        // 3. Skill Trends Chart (Line)
+        if (skillRef.current) {
+            const chart = echarts.init(skillRef.current)
+            chartInstances.current.push(chart)
+
+            chart.setOption({
+                grid: { left: 40, right: 20, top: 40, bottom: 40 },
+                tooltip: { trigger: 'axis' },
+                legend: { top: 0, textStyle: { fontSize: 10 } },
+                xAxis: { type: 'category', data: ['M1', 'M2', 'M3', 'Current'], boundaryGap: false, axisLabel: { fontSize: 9 } },
+                yAxis: { type: 'value', axisLabel: { fontSize: 9, formatter: '+{value}%' } },
+                series: [
+                    { name: 'Feedback', type: 'line', smooth: true, data: [0, 8, 15, manager.teamAnalytics.improvementTrends.feedbackSkill], itemStyle: { color: '#5470C6' } },
+                    { name: 'Delegation', type: 'line', smooth: true, data: [0, 5, 9, manager.teamAnalytics.improvementTrends.delegationSkill], itemStyle: { color: '#91CC75' } },
+                    { name: 'EQ', type: 'line', smooth: true, data: [0, 6, 11, manager.teamAnalytics.improvementTrends.emotionalIntelligence], itemStyle: { color: '#EE6666' } }
+                ]
+            })
         }
 
-        return () => charts.current.forEach(c => c.destroy())
-    }, [])
+        const handleResize = () => chartInstances.current.forEach(c => c?.resize())
+        window.addEventListener('resize', handleResize)
+        return () => {
+            window.removeEventListener('resize', handleResize)
+            chartInstances.current.forEach(c => c?.dispose())
+        }
+    }, [manager])
 
     return (
         <div>
@@ -137,9 +155,7 @@ export default function ManagerAnalytics() {
                             <i className="fas fa-chart-bar text-primary-blue text-xs"></i> Team Progress
                         </h2>
                     </div>
-                    <div className="p-4 h-[250px]">
-                        <canvas ref={progressChartRef}></canvas>
-                    </div>
+                    <div className="p-4 h-[250px]" ref={progressRef}></div>
                 </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100">
@@ -148,9 +164,7 @@ export default function ManagerAnalytics() {
                             <i className="fas fa-chart-pie text-primary-blue text-xs"></i> Risk Distribution
                         </h2>
                     </div>
-                    <div className="p-4 h-[250px]">
-                        <canvas ref={riskChartRef}></canvas>
-                    </div>
+                    <div className="p-4 h-[250px]" ref={riskRef}></div>
                 </div>
             </div>
 
@@ -161,9 +175,7 @@ export default function ManagerAnalytics() {
                             <i className="fas fa-chart-line text-primary-blue text-xs"></i> Skill Trends
                         </h2>
                     </div>
-                    <div className="p-4 h-[250px]">
-                        <canvas ref={skillChartRef}></canvas>
-                    </div>
+                    <div className="p-4 h-[250px]" ref={skillRef}></div>
                 </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100">
