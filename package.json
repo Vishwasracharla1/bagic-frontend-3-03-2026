@@ -12,6 +12,9 @@
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.2.0",
     "chart.js": "^4.5.1",
+    "cytoscape": "^3.33.1",
+    "cytoscape-cose-bilkent": "^4.1.0",
+    "cytoscape-dagre": "^2.5.0",
     "echarts": "^6.0.0",
     "react": "^19.2.0",
     "react-chartjs-2": "^5.3.1",

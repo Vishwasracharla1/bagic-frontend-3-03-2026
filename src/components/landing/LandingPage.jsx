@@ -7,7 +7,16 @@ export default function LandingPage() {
             <div className="bg-gradient-to-br from-primary-dark to-primary-blue text-white min-h-screen py-12 px-6">
                 <div className="max-w-[1400px] mx-auto">
                     {/* Logo Section */}
-                    <div className="text-center mb-8">
+                    <div className="text-center mb-8 relative">
+                        <div className="absolute top-0 right-0">
+                            <button
+                                onClick={() => { localStorage.clear(); navigate('/login'); }}
+                                className="bg-white/10 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-white/20 transition-all flex items-center gap-2 border border-white/10"
+                            >
+                                <i className="fas fa-sign-out-alt"></i>
+                                Sign Out
+                            </button>
+                        </div>
                         <div className="inline-flex items-center gap-3 text-2xl font-bold mb-4">
                             <i className="fas fa-shield-alt text-3xl"></i>
                             <span>BAGIC</span>

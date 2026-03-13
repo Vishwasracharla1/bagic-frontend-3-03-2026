@@ -18,8 +18,8 @@ export default function ManagerDashboard() {
         <div className="h-screen flex flex-col">
             <Navbar
                 title="Manager Dashboard"
-                userName="Priya Mehta"
-                userRole="Senior Claims Manager"
+                userName={localStorage.getItem('user_name') || 'Manager'}
+                userRole={localStorage.getItem('user_role') === 'admin' ? 'Administrator' : 'Manager'}
                 userIcon="user-tie"
             />
             <div className="flex flex-1 overflow-hidden">

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MOCK_DATA } from '../../data/mockData'
 import * as echarts from 'echarts'
@@ -9,6 +9,78 @@ export default function ComplianceOverview() {
     const overview = compliance.complianceOverview
     const chartRef = useRef(null)
     const chartInstance = useRef(null)
+
+    const [apiData, setApiData] = useState(null)
+    const [trendData, setTrendData] = useState(null)
+    const [recentEvents, setRecentEvents] = useState(null)
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        const fetchDashboardData = async () => {
+            try {
+                // Fetch Card Stats
+                const statsResponse = await fetch(import.meta.env.VITE_COHORTS_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'accept': 'application/json',
+                        'authorization': `Bearer ${import.meta.env.VITE_COHORTS_AUTH_TOKEN}`,
+                        'content-type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        "type": "TIDB",
+                        "definition": "SELECT COUNT(*) AS reasoning_events, IFNULL(SUM(CASE WHEN confidence_score < 0.40 THEN 1 ELSE 0 END), 0) AS violations, CONCAT( ROUND( 100.0 * IFNULL(SUM(CASE WHEN confidence_score >= 0.40 THEN 1 ELSE 0 END), 0) / NULLIF(COUNT(*), 0), 0 ), '% PASS' ) AS violations_pass_text, IFNULL(SUM(CASE WHEN confidence_score < 0.50 THEN 1 ELSE 0 END), 0) AS escalations, CONCAT( ROUND( 100.0 * IFNULL(SUM(CASE WHEN confidence_score < 0.50 THEN 1 ELSE 0 END), 0) / NULLIF(COUNT(*), 0), 2 ), '% RATE' ) AS escalation_rate_text, ROUND( 100.0 * IFNULL(SUM(CASE WHEN confidence_score >= 0.40 THEN 1 ELSE 0 END), 0) / NULLIF(COUNT(*), 0), 0 ) AS pass_rate, CONCAT( ROUND( 100.0 * IFNULL(SUM(CASE WHEN confidence_score >= 0.40 THEN 1 ELSE 0 END), 0) / NULLIF(COUNT(*), 0), 0 ), '%' ) AS pass_rate_text, CONCAT( 'Q', QUARTER(CURRENT_DATE), ' ', YEAR(CURRENT_DATE) - 1 ) AS period_label FROM t_69a830fc42abf6674cbcb942_t WHERE YEAR(created_at) = YEAR(CURRENT_DATE) - 1 AND QUARTER(created_at) = QUARTER(CURRENT_DATE);"
+                    })
+                });
+                const statsResult = await statsResponse.json();
+                if (statsResult.status === 'success' && statsResult.data?.length > 0) {
+                    setApiData(statsResult.data[0]);
+                }
+
+                // Fetch Trend Data
+                const trendResponse = await fetch(import.meta.env.VITE_COHORTS_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'accept': 'application/json',
+                        'authorization': `Bearer ${import.meta.env.VITE_COHORTS_AUTH_TOKEN}`,
+                        'content-type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        "type": "TIDB",
+                        "definition": "SELECT x.quarter_key, IFNULL(t.audit_events, 0) AS audit_events FROM ( SELECT 'Q1' AS quarter_key, 1 AS sort_order UNION ALL SELECT 'Q2', 2 UNION ALL SELECT 'Q3', 3 UNION ALL SELECT 'Q4', 4 ) x LEFT JOIN ( SELECT CASE WHEN MONTH(created_at) BETWEEN 1 AND 3 THEN 'Q1' WHEN MONTH(created_at) BETWEEN 4 AND 6 THEN 'Q2' WHEN MONTH(created_at) BETWEEN 7 AND 9 THEN 'Q3' ELSE 'Q4' END AS quarter_key, COUNT(*) AS audit_events FROM t_69a830fc42abf6674cbcb942_t WHERE YEAR(created_at) = YEAR(CURRENT_DATE)-1  GROUP BY CASE WHEN MONTH(created_at) BETWEEN 1 AND 3 THEN 'Q1' WHEN MONTH(created_at) BETWEEN 4 AND 6 THEN 'Q2' WHEN MONTH(created_at) BETWEEN 7 AND 9 THEN 'Q3' ELSE 'Q4' END ) t ON x.quarter_key = t.quarter_key ORDER BY x.sort_order;"
+                    })
+                });
+                const trendResult = await trendResponse.json();
+                if (trendResult.status === 'success' && trendResult.data) {
+                    setTrendData(trendResult.data);
+                }
+
+                // Fetch Recent Events
+                const eventsResponse = await fetch(import.meta.env.VITE_COHORTS_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'accept': 'application/json',
+                        'authorization': `Bearer ${import.meta.env.VITE_COHORTS_AUTH_TOKEN}`,
+                        'content-type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        "type": "TIDB",
+                        "definition": "SELECT event_title, DATE_FORMAT(MAX(created_at), '%b %d') AS event_date FROM ( SELECT CASE WHEN decision_type = 'framework_selection' THEN CONCAT(selected_framework, ' ', selected_stage) ELSE decision_type END AS event_title, created_at FROM t_69a830fc42abf6674cbcb942_t ) x GROUP BY event_title ORDER BY MAX(created_at) DESC LIMIT 5;"
+                    })
+                });
+                const eventsResult = await eventsResponse.json();
+                if (eventsResult.status === 'success' && eventsResult.data) {
+                    setRecentEvents(eventsResult.data);
+                }
+
+            } catch (error) {
+                console.error("Error fetching compliance data:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchDashboardData();
+    }, []);
 
     useEffect(() => {
         if (chartRef.current) {
@@ -25,7 +97,7 @@ export default function ComplianceOverview() {
                     name: 'Audit Events',
                     type: 'line',
                     smooth: true,
-                    data: [6234, 7891, 9234, 12847],
+                    data: trendData ? trendData.map(d => d.audit_events) : [6234, 7891, 9234, apiData ? apiData.reasoning_events : 12847],
                     itemStyle: { color: '#5470C6' },
                     areaStyle: {
                         color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -47,7 +119,7 @@ export default function ComplianceOverview() {
             window.removeEventListener('resize', handleResize)
             chartInstance.current?.dispose()
         }
-    }, [overview])
+    }, [overview, apiData, trendData])
 
     return (
         <div>
@@ -56,7 +128,12 @@ export default function ComplianceOverview() {
                     <i className="fas fa-shield-alt text-primary-blue text-xl"></i>
                     Compliance Overview
                 </h1>
-                <p className="text-gray-400 text-sm font-medium tracking-wide">Q4 2023 - Comprehensive audit status</p>
+                <p className="text-gray-400 text-sm font-medium tracking-wide">{apiData ? `${apiData.period_label} - Comprehensive audit status` : 'Q4 2023 - Comprehensive audit status'}</p>
+                {loading && (
+                    <div className="text-[10px] text-primary-blue animate-pulse mt-1 font-bold">
+                        <i className="fas fa-sync-alt fa-spin mr-1"></i> UPDATING REAL-TIME DATA...
+                    </div>
+                )}
             </div>
 
             {/* Status Banner */}
@@ -67,9 +144,11 @@ export default function ComplianceOverview() {
                 <div className="flex-1">
                     <h2 className="text-sm font-bold text-gray-800 tracking-tight">{overview.violations === 0 ? 'All Systems Compliant' : 'Attention Required'}</h2>
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
-                        {overview.violations === 0
-                            ? `${overview.totalReasoningEvents.toLocaleString()} events audited - 0 boundary breaches.`
-                            : `${overview.violations} violation(s) detected. Immediate review required.`}
+                        {apiData 
+                            ? `${apiData.reasoning_events.toLocaleString()} events audited - ${apiData.violations} boundary breaches.`
+                            : overview.violations === 0
+                                ? `${overview.totalReasoningEvents.toLocaleString()} events audited - 0 boundary breaches.`
+                                : `${overview.violations} violation(s) detected. Immediate review required.`}
                     </p>
                 </div>
             </div>
@@ -77,10 +156,32 @@ export default function ComplianceOverview() {
             {/* Stats */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 {[
-                    { icon: 'check-circle', value: overview.totalReasoningEvents.toLocaleString(), label: 'Reasoning Events', change: 'Q4 2023' },
-                    { icon: 'shield-alt', value: overview.violations, label: 'Violations', change: '100% Pass', color: 'success' },
-                    { icon: 'exclamation-circle', value: overview.escalations, label: 'Escalations', change: `${((overview.escalations / overview.totalReasoningEvents) * 100).toFixed(2)}% rate` },
-                    { icon: 'clipboard-check', value: `${overview.auditPassRate}%`, label: 'Pass Rate', change: 'Validated', color: 'success' },
+                    { 
+                        icon: 'check-circle', 
+                        value: apiData ? apiData.reasoning_events.toLocaleString() : overview.totalReasoningEvents.toLocaleString(), 
+                        label: 'Reasoning Events', 
+                        change: apiData ? apiData.period_label : 'Q4 2023' 
+                    },
+                    { 
+                        icon: 'shield-alt', 
+                        value: apiData ? apiData.violations : overview.violations, 
+                        label: 'Violations', 
+                        change: apiData ? apiData.violations_pass_text : '100% Pass', 
+                        color: (apiData ? apiData.violations === 0 : overview.violations === 0) ? 'success' : 'warning'
+                    },
+                    { 
+                        icon: 'exclamation-circle', 
+                        value: apiData ? apiData.escalations : overview.escalations, 
+                        label: 'Escalations', 
+                        change: apiData ? apiData.escalation_rate_text : `${((overview.escalations / overview.totalReasoningEvents) * 100).toFixed(2)}% rate` 
+                    },
+                    { 
+                        icon: 'clipboard-check', 
+                        value: apiData ? apiData.pass_rate_text : `${overview.auditPassRate}%`, 
+                        label: 'Pass Rate', 
+                        change: 'Validated', 
+                        color: 'success' 
+                    },
                 ].map((stat, i) => (
                     <div key={i} className={`bg-white rounded-xl p-4 shadow-sm border border-gray-100 ${stat.color ? `border-l-4 border-l-${stat.color}` : ''}`}>
                         <div className="flex items-start gap-3">
@@ -192,14 +293,14 @@ export default function ComplianceOverview() {
                             <h2 className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Recent Events</h2>
                         </div>
                         <div className="p-3 space-y-3">
-                            {[
-                                { title: 'Audit Completed', date: 'Jan 05' },
-                                { title: 'Policy Rev 2.1', date: 'Dec 28' },
-                                { title: 'Scalability Boost', date: 'Dec 15' },
-                            ].map((activity, i) => (
+                            {(recentEvents || [
+                                { event_title: 'Audit Completed', event_date: 'Jan 05' },
+                                { event_title: 'Policy Rev 2.1', event_date: 'Dec 28' },
+                                { event_title: 'Scalability Boost', event_date: 'Dec 15' },
+                            ]).map((activity, i) => (
                                 <div key={i} className="flex justify-between items-center text-[11px]">
-                                    <span className="font-bold text-gray-700 truncate pr-2">{activity.title}</span>
-                                    <span className="text-[9px] text-gray-400 font-bold uppercase whitespace-nowrap">{activity.date}</span>
+                                    <span className="font-bold text-gray-700 truncate pr-2">{activity.event_title}</span>
+                                    <span className="text-[9px] text-gray-400 font-bold uppercase whitespace-nowrap">{activity.event_date}</span>
                                 </div>
                             ))}
                         </div>
